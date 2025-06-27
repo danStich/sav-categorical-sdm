@@ -1,0 +1,120 @@
+model {
+ 
+  # Parameter definitions
+  for(i in 1:n_species){
+    for(j in 1:n_lakes){	
+      for(t in 1:n_sites){
+      
+        # 2. Occupancy
+        # Probabilities of occupancy in each state for each species in each lake at each site
+        psi[1, i, j, t] <- 1 / (1 + prop[1, i, j, t] + prop[2, i, j, t] + prop[3, i, j, t] + prop[4, i, j, t] + prop[5, i, j, t])
+        psi[2, i, j, t] <- prop[1, i, j, t] / (1 + prop[1, i, j, t] + prop[2, i, j, t] + prop[3, i, j, t] + prop[4, i, j, t] + prop[5, i, j, t]) # prob. of occupancy state 1
+        psi[3, i, j, t] <- prop[2, i, j, t] / (1 + prop[1, i, j, t] + prop[2, i, j, t] + prop[3, i, j, t] + prop[4, i, j, t] + prop[5, i, j, t]) # prob. of occupancy state 2
+        psi[4, i, j, t] <- prop[3, i, j, t] / (1 + prop[1, i, j, t] + prop[2, i, j, t] + prop[3, i, j, t] + prop[4, i, j, t] + prop[5, i, j, t]) # prob. of occupancy state 3
+        psi[5, i, j, t] <- prop[4, i, j, t] / (1 + prop[1, i, j, t] + prop[2, i, j, t] + prop[3, i, j, t] + prop[4, i, j, t] + prop[5, i, j, t]) # prob. of occupancy state 4
+
+        # 2. Observation process
+        # Detection
+        # Unoccupied
+        po1[1,1,i,j,t] <- 1 
+        po1[1,2,i,j,t] <- 0
+        po1[1,3,i,j,t] <- 0
+        po1[1,4,i,j,t] <- 0
+        po1[1,5,i,j,t] <- 0
+        # Trace
+        po1[2,1,i,j,t] <- 1 - p[1, i, j, t]
+        po1[2,2,i,j,t] <- p[1, i, j, t]
+        po1[2,3,i,j,t] <- p2[1]
+        po1[2,4,i,j,t] <- 0
+        po1[2,5,i,j,t] <- 0
+        # Sparse
+        po1[3,1,i,j,t] <- 1 - p[2, i, j, t]
+        po1[3,2,i,j,t] <- p3[1]
+        po1[3,3,i,j,t] <- p[2, i, j, t]    
+        po1[3,4,i,j,t] <- 0
+        po1[3,5,i,j,t] <- 0
+        # Moderate
+        po1[4,1,i,j,t] <- 1 - p[3, i, j, t]
+        po1[4,2,i,j,t] <- p4[1]
+        po1[4,3,i,j,t] <- p4[2]
+        po1[4,4,i,j,t] <- p[3, i, j, t]
+        po1[4,5,i,j,t] <- p4[3]  
+        # Dense
+        po1[5,1,i,j,t] <- 1 - p[4, i, j, t]
+        po1[5,2,i,j,t] <- p5[1]
+        po1[5,3,i,j,t] <- p5[2]
+        po1[5,4,i,j,t] <- p5[3]  
+        po1[5,5,i,j,t] <- p[4, i, j, t]
+  
+      } # site loop
+    } # lake loop
+  } # species loop
+   
+  # Likelihood
+  for(i in 1:n_species){
+    for(j in 1:n_lakes){
+      for(t in 1:n_sites){ 
+	
+        # Biological model for occupancy state (unkown: 0, 1, 2, 3, 4, all + 1)
+        z[i, j, t] ~ dcat(psi[1:5, i , j, t])
+     
+	      for(k in 1:n_reps){
+          # Observation model
+          y[i, j, t, k] ~ dcat(po1[z[i, j, t], 1:5, i, j, t]) 
+        }
+      } 
+    }
+  }
+
+  # Priors
+  # Occupancy probability
+  for (s in 1:5){         
+    for(i in 1:n_species){
+      for(j in 1:n_lakes){	
+        for(t in 1:n_sites){ 
+        
+          # Occupancy state
+  		    logit(prop[s, i, j, t]) <- lprob[s, i, j, t]
+          lprob[s, i, j, t] ~ dnorm(lprob_mu, lprob_tau)  
+          
+	      } # site loop
+      } # lake loop
+    } # species loop
+  } # state loop
+
+  # Detection probability
+  # For observed states only
+  for (s in 1:4){         
+    for(i in 1:n_species){
+      for(j in 1:n_lakes){	
+        for(t in 1:n_sites){ 
+        
+          # Detection probability (species-, lake-, and site-specific)
+          logit(p[s, i, j, t]) <- lp[s, i, j, t]	
+          lp[s, i, j, t] ~ dnorm(lp_mu, lp_tau)
+          
+	      } # site loop
+      } # lake loop
+    } # species loop
+  } # state loop
+          
+  # Hyper priors
+  # Occupancy state
+  lprob_mu ~ dnorm(0, 1)
+  lprob_tau <- 1/(lprob_sigma * lprob_sigma)
+  lprob_sigma ~ dunif(0, 10)
+    
+  # Detection
+  lp_mu ~ dnorm(0, 1) # Mean on logit scale
+  lp_tau <- 1/(lp_sigma * lp_sigma)
+  lp_sigma ~ dunif(0, 10)
+
+  # Detection uncertainty
+  for(d in 1:3){
+    p2[d] ~ dunif(0, 1)
+    p3[d] ~ dunif(0, 1)
+    p4[d] ~ dunif(0, 1)
+    p5[d] ~ dunif(0, 1)
+  }
+          
+}
